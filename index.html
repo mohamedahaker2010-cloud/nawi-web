@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nawi Web</title>
+    <style>
+        :root {
+            --bg1: #0a0d1a;
+            --bg2: #131834;
+            --card-bg: #12162a;
+            --card-bg-2: #171d38;
+            --accent: #22d3aa;
+            --accent-soft: rgba(34, 211, 170, 0.22);
+            --amber: #fbbf24;
+            --electron: #4fd8ff;
+            --text: #eef0f8;
+            --muted: #8891ab;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: radial-gradient(circle at 20% 0%, var(--bg2), var(--bg1) 60%);
+            color: var(--text);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 15px;
+            text-align: center;
+            min-height: 100vh;
+        }
+
+        h1 { color: var(--accent); margin-bottom: 5px; font-size: 25px; letter-spacing: 0.3px; }
+        .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 15px; }
+
+        .table-wrapper {
+            overflow-x: auto;
+            width: 100%;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 8px;
+        }
+
+        .periodic-table {
+            display: grid;
+            grid-template-columns: repeat(18, 48px);
+            gap: 3px;
+            justify-content: start;
+            width: fit-content;
+            margin: 0 auto;
+        }
+
+        .element {
+            background-color: #151a30;
+            border: 2px solid var(--accent);
+            border-radius: 6px;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+            transition: 0.18s ease;
+        }
+        .element:hover {
+            transform: scale(1.12);
+            z-index: 5;
+            box-shadow: 0 0 16px var(--accent-soft);
+            border-color: #5eead4;
+        }
+
+        .atomic-number { font-size: 8px; color: var(--muted); }
+        .symbol { font-size: 15px; font-weight: bold; color: var(--accent); }
+        .name { font-size: 5px; color: #b7bcd6; }
+
+        .empty { width: 48px; height: 48px; }
+
+        .info-card {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(160deg, var(--card-bg), var(--card-bg-2));
+            border: 1px solid var(--accent-soft);
+            border-radius: 14px;
+            padding: 22px;
+            z-index: 100;
+            width: 92%;
+            max-width: 580px;
+            max-height: 85vh;
+            overflow-y: auto;
+            overflow-x: visible;
+            text-align: right;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(34,211,170,0.08);
+        }
+        .info-card.active { display: block; }
+        .close-btn {
+            position: absolute; top: 10px; right: 12px;
+            background: rgba(255,255,255,0.05); border: none; color: var(--text);
+            font-size: 16px; cursor: pointer; width: 26px; height: 26px; border-radius: 50%;
+            transition: 0.15s;
+        }
+        .close-btn:hover { background: rgba(255,255,255,0.12); }
+
+        .info-card h2 { color: var(--accent); margin-bottom: 14px; text-align: center; font-size: 22px; }
+
+        .card-body {
+            display: flex;
+            flex-direction: row-reverse;
+            gap: 18px;
+            align-items: flex-start;
+        }
+
+        .card-visual {
+            flex: 0 0 240px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-info {
+            flex: 1;
+            min-width: 0;
+            text-align: right;
+        }
+
+        .element-image {
+            width: 110px;
+            height: 110px;
+            border-radius: 12px;
+            border: 1px solid var(--accent-soft);
+            background: linear-gradient(150deg, #1c2242, #10142a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-size: 38px;
+            font-weight: bold;
+            color: rgba(34, 211, 170, 0.45);
+        }
+        .element-image img { width: 100%; height: 100%; object-fit: cover; }
+
+        .info-card p { margin: 6px 0; font-size: 13.5px; color: #d3d7ea; }
+        .info-card p b, .info-card p strong { color: var(--text); }
+
+        .nav-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
+        .nav-buttons button, .atom-btn {
+            background: var(--accent);
+            color: #06231c;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 14px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12.5px;
+            transition: 0.15s;
+        }
+        .nav-buttons button:hover, .atom-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .atom-btn { margin: 0; }
+
+        /* --- Atom stage: canvas + annotation tooltip --- */
+        .atom-stage {
+            position: relative;
+            width: 240px;
+            height: 210px;
+            display: none;
+        }
+        .atom-stage.active { display: block; }
+
+        #atom-canvas {
+            position: absolute;
+            left: 0;
+            top: 40px;
+            width: 170px;
+            height: 170px;
+            background-color: #0d1128;
+            border: 1px solid var(--accent-soft);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        #nucleus-line-svg {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 240px;
+            height: 210px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        #nucleus-line-svg.active { opacity: 1; }
+
+        #nucleus-tooltip {
+            position: absolute;
+            left: 95px;
+            top: 0px;
+            width: 140px;
+            background: #1a2040;
+            border: 1px solid var(--accent);
+            border-radius: 9px;
+            padding: 8px 10px;
+            font-size: 11.5px;
+            text-align: right;
+            opacity: 0;
+            transform: scale(0.85);
+            transform-origin: bottom left;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            pointer-events: none;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.5);
+        }
+        #nucleus-tooltip.active { opacity: 1; transform: scale(1); }
+
+        .tip-row { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin: 4px 0; white-space: nowrap; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        .dot-proton { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+        .dot-neutron { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+        .hint { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+        @media (max-width: 600px) {
+            .periodic-table { grid-template-columns: repeat(18, 24px); gap: 1px; }
+            .element { width: 24px; height: 24px; border-radius: 3px; border-width: 1px; }
+            .empty { width: 24px; height: 24px; }
+            .symbol { font-size: 8px; }
+            .name { display: none; }
+            .atomic-number { font-size: 5px; }
+
+            .card-body { flex-direction: column; align-items: center; }
+            .card-visual { flex: none; }
+            .card-info { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Nawi Web ⚛️</h1>
+    <p class="subtitle">Das interaktive Periodensystem</p>
+
+    <div class="table-wrapper">
+        <div class="periodic-table" id="periodic-table"></div>
+    </div>
+
+    <div id="info-card" class="info-card">
+        <button class="close-btn" onclick="closeInfo()">✕</button>
+        <h2 id="info-name"></h2>
+
+        <div class="card-body">
+            <div class="card-visual">
+                <div class="element-image" id="element-image"></div>
+                <button class="atom-btn" onclick="toggleAtom()">⚛️ Atommodell</button>
+
+                <div class="atom-stage" id="atom-stage">
+                    <canvas id="atom-canvas" width="170" height="170"></canvas>
+
+                    <svg id="nucleus-line-svg">
+                        <line id="nucleus-line" x1="85" y1="125" x2="95" y2="48" stroke="#22d3aa" stroke-width="1.4" />
+                        <circle cx="85" cy="125" r="2.2" fill="#22d3aa" />
+                        <circle id="nucleus-line-dot" cx="95" cy="48" r="3" fill="#22d3aa" />
+                    </svg>
+
+                    <div id="nucleus-tooltip">
+                        <div class="tip-row"><span id="tip-protons"></span><span class="dot dot-proton"></span></div>
+                        <div class="tip-row"><span id="tip-neutrons"></span><span class="dot dot-neutron"></span></div>
+                    </div>
+                </div>
+
+                <p class="hint">Tippe auf den Kern für Details</p>
+            </div>
+
+            <div class="card-info">
+                <p id="info-symbol"></p>
+                <p id="info-number"></p>
+                <p id="info-mass"></p>
+                <p id="info-protons"></p>
+                <p id="info-neutrons"></p>
+                <p id="info-electrons"></p>
+                <p id="info-state"></p>
+                <p id="info-shells"></p>
+                <p id="info-found"></p>
+                <p id="info-uses"></p>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button onclick="prevElement()">← Zurück</button>
+            <button onclick="nextElement()">Weiter →</button>
+        </div>
+    </div>
+
+    <script>
+        const elementsData = [
+            { symbol: "H", name: "Wasserstoff", number: 1, mass: 1.008, protons: 1, electrons: 1, state: "gasförmig", shells: "1", found: "im Wasser", uses: "Raketentreibstoff", row: 1, col: 1, img: "" },
+            { symbol: "He", name: "Helium", number: 2, mass: 4.003, protons: 2, electrons: 2, state: "gasförmig", shells: "2", found: "in der Luft", uses: "Ballons", row: 1, col: 18, img: "" },
+            { symbol: "Li", name: "Lithium", number: 3, mass: 6.941, protons: 3, electrons: 3, state: "fest", shells: "2 / 1", found: "in Mineralien", uses: "Batterien", row: 2, col: 1, img: "" },
+            { symbol: "Be", name: "Beryllium", number: 4, mass: 9.012, protons: 4, electrons: 4, state: "fest", shells: "2 / 2", found: "in Mineralien", uses: "Raumfahrt", row: 2, col: 2, img: "" },
+            { symbol: "B", name: "Bor", number: 5, mass: 10.811, protons: 5, electrons: 5, state: "fest", shells: "2 / 3", found: "in Mineralien", uses: "Glas", row: 2, col: 13, img: "" },
+            { symbol: "C", name: "Kohlenstoff", number: 6, mass: 12.011, protons: 6, electrons: 6, state: "fest", shells: "2 / 4", found: "in Lebewesen", uses: "Stahl", row: 2, col: 14, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Carbon_(Element_-_6).jpg" },
+            { symbol: "N", name: "Stickstoff", number: 7, mass: 14.007, protons: 7, electrons: 7, state: "gasförmig", shells: "2 / 5", found: "in der Luft", uses: "Dünger", row: 2, col: 15, img: "" },
+            { symbol: "O", name: "Sauerstoff", number: 8, mass: 15.999, protons: 8, electrons: 8, state: "gasförmig", shells: "2 / 6", found: "in der Luft", uses: "Atmung", row: 2, col: 16, img: "" },
+            { symbol: "F", name: "Fluor", number: 9, mass: 18.998, protons: 9, electrons: 9, state: "gasförmig", shells: "2 / 7", found: "in Mineralien", uses: "Zahnpasta", row: 2, col: 17, img: "" },
+            { symbol: "Ne", name: "Neon", number: 10, mass: 20.180, protons: 10, electrons: 10, state: "gasförmig", shells: "2 / 8", found: "in der Luft", uses: "Leuchtreklamen", row: 2, col: 18, img: "" },
+            { symbol: "Na", name: "Natrium", number: 11, mass: 22.990, protons: 11, electrons: 11, state: "fest", shells: "2 / 8 / 1", found: "im Salz", uses: "Speisesalz", row: 3, col: 1, img: "" },
+            { symbol: "Mg", name: "Magnesium", number: 12, mass: 24.305, protons: 12, electrons: 12, state: "fest", shells: "2 / 8 / 2", found: "in der Erde", uses: "Feuerwerk", row: 3, col: 2, img: "" },
+            { symbol: "Al", name: "Aluminium", number: 13, mass: 26.982, protons: 13, electrons: 13, state: "fest", shells: "2 / 8 / 3", found: "in der Erdkruste", uses: "Dosen", row: 3, col: 13, img: "" },
+            { symbol: "Si", name: "Silicium", number: 14, mass: 28.086, protons: 14, electrons: 14, state: "fest", shells: "2 / 8 / 4", found: "im Sand", uses: "Chips", row: 3, col: 14, img: "" },
+            { symbol: "P", name: "Phosphor", number: 15, mass: 30.974, protons: 15, electrons: 15, state: "fest", shells: "2 / 8 / 5", found: "in Knochen", uses: "Dünger", row: 3, col: 15, img: "" },
+            { symbol: "S", name: "Schwefel", number: 16, mass: 32.065, protons: 16, electrons: 16, state: "fest", shells: "2 / 8 / 6", found: "in Vulkanen", uses: "Dünger", row: 3, col: 16, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Sulfur-crystal.jpg" },
+            { symbol: "Cl", name: "Chlor", number: 17, mass: 35.453, protons: 17, electrons: 17, state: "gasförmig", shells: "2 / 8 / 7", found: "im Salz", uses: "Desinfektion", row: 3, col: 17, img: "" },
+            { symbol: "Ar", name: "Argon", number: 18, mass: 39.948, protons: 18, electrons: 18, state: "gasförmig", shells: "2 / 8 / 8", found: "in der Luft", uses: "Glühbirnen", row: 3, col: 18, img: "" },
+            { symbol: "K", name: "Kalium", number: 19, mass: 39.098, protons: 19, electrons: 19, state: "fest", shells: "2 / 8 / 8 / 1", found: "in Bananen", uses: "Dünger", row: 4, col: 1, img: "" },
+            { symbol: "Ca", name: "Calcium", number: 20, mass: 40.078, protons: 20, electrons: 20, state: "fest", shells: "2 / 8 / 8 / 2", found: "in Knochen", uses: "Zement", row: 4, col: 2, img: "" },
+            { symbol: "Sc", name: "Scandium", number: 21, mass: 44.956, protons: 21, electrons: 21, state: "fest", shells: "2 / 8 / 9 / 2", found: "in Mineralien", uses: "Flugzeuge", row: 4, col: 3, img: "" },
+            { symbol: "Ti", name: "Titan", number: 22, mass: 47.867, protons: 22, electrons: 22, state: "fest", shells: "2 / 8 / 10 / 2", found: "in Mineralien", uses: "Implantate", row: 4, col: 4, img: "" },
+            { symbol: "V", name: "Vanadium", number: 23, mass: 50.942, protons: 23, electrons: 23, state: "fest", shells: "2 / 8 / 11 / 2", found: "in Mineralien", uses: "Stahl", row: 4, col: 5, img: "" },
+            { symbol: "Cr", name: "Chrom", number: 24, mass: 51.996, protons: 24, electrons: 24, state: "fest", shells: "2 / 8 / 13 / 1", found: "in Mineralien", uses: "Edelstahl", row: 4, col: 6, img: "" },
+            { symbol: "Mn", name: "Mangan", number: 25, mass: 54.938, protons: 25, electrons: 25, state: "fest", shells: "2 / 8 / 13 / 2", found: "in der Erdkruste", uses: "Stahl", row: 4, col: 7, img: "" },
+            { symbol: "Fe", name: "Eisen", number: 26, mass: 55.845, protons: 26, electrons: 26, state: "fest", shells: "2 / 8 / 14 / 2", found: "in der Erdkruste", uses: "Stahl", row: 4, col: 8, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Iron_(Element_-_26)_1.jpg" },
+            { symbol: "Co", name: "Kobalt", number: 27, mass: 58.933, protons: 27, electrons: 27, state: "fest", shells: "2 / 8 / 15 / 2", found: "in Mineralien", uses: "Batterien", row: 4, col: 9, img: "" },
+            { symbol: "Ni", name: "Nickel", number: 28, mass: 58.693, protons: 28, electrons: 28, state: "fest", shells: "2 / 8 / 16 / 2", found: "in der Erdkruste", uses: "Münzen", row: 4, col: 10, img: "" },
+            { symbol: "Cu", name: "Kupfer", number: 29, mass: 63.546, protons: 29, electrons: 29, state: "fest", shells: "2 / 8 / 18 / 1", found: "in Mineralien", uses: "Kabel", row: 4, col: 11, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Copper_(Element_-_29).jpg" },
+            { symbol: "Zn", name: "Zink", number: 30, mass: 65.380, protons: 30, electrons: 30, state: "fest", shells: "2 / 8 / 18 / 2", found: "in Mineralien", uses: "Batterien", row: 4, col: 12, img: "" },
+            { symbol: "Ga", name: "Gallium", number: 31, mass: 69.723, protons: 31, electrons: 31, state: "fest", shells: "2 / 8 / 18 / 3", found: "in Mineralien", uses: "Touchscreens", row: 4, col: 13, img: "" },
+            { symbol: "Ge", name: "Germanium", number: 32, mass: 72.640, protons: 32, electrons: 32, state: "fest", shells: "2 / 8 / 18 / 4", found: "in Mineralien", uses: "Glasfasern", row: 4, col: 14, img: "" },
+            { symbol: "As", name: "Arsen", number: 33, mass: 74.922, protons: 33, electrons: 33, state: "fest", shells: "2 / 8 / 18 / 5", found: "in Mineralien", uses: "Halbleiter", row: 4, col: 15, img: "" },
+            { symbol: "Se", name: "Selen", number: 34, mass: 78.960, protons: 34, electrons: 34, state: "fest", shells: "2 / 8 / 18 / 6", found: "in Mineralien", uses: "Glas", row: 4, col: 16, img: "" },
+            { symbol: "Br", name: "Brom", number: 35, mass: 79.904, protons: 35, electrons: 35, state: "flüssig", shells: "2 / 8 / 18 / 7", found: "im Meerwasser", uses: "Flammschutz", row: 4, col: 17, img: "" },
+            { symbol: "Kr", name: "Krypton", number: 36, mass: 83.798, protons: 36, electrons: 36, state: "gasförmig", shells: "2 / 8 / 18 / 8", found: "in der Luft", uses: "Laser", row: 4, col: 18, img: "" },
+            { symbol: "Ag", name: "Silber", number: 47, mass: 107.868, protons: 47, electrons: 47, state: "fest", shells: "2 / 8 / 18 / 18 / 1", found: "in Mineralien", uses: "Schmuck", row: 5, col: 11, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Silver.jpg" },
+            { symbol: "Au", name: "Gold", number: 79, mass: 196.967, protons: 79, electrons: 79, state: "fest", shells: "2 / 8 / 18 / 32 / 18 / 1", found: "in Flüssen", uses: "Schmuck", row: 6, col: 11, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Gold_(Element_-_79).jpg" },
+            { symbol: "Hg", name: "Quecksilber", number: 80, mass: 200.590, protons: 80, electrons: 80, state: "flüssig", shells: "2 / 8 / 18 / 32 / 18 / 2", found: "in Mineralien", uses: "Thermometer", row: 6, col: 12, img: "https://commons.wikimedia.org/wiki/Special:FilePath/Pouring_liquid_mercury_bionerd.jpg" }
+        ];
+
+        const table = document.getElementById('periodic-table');
+        const occupied = new Set(elementsData.map(el => `${el.row}-${el.col}`));
+
+        for (let row = 1; row <= 7; row++) {
+            for (let col = 1; col <= 18; col++) {
+                const key = `${row}-${col}`;
+                if (occupied.has(key)) {
+                    const el = elementsData.find(e => e.row === row && e.col === col);
+                    table.appendChild(createElement(el));
+                } else {
+                    const empty = document.createElement('div');
+                    empty.className = 'empty';
+                    table.appendChild(empty);
+                }
+            }
+        }
+
+        function createElement(el) {
+            const div = document.createElement('div');
+            div.className = 'element';
+            div.innerHTML = `<span class="atomic-number">${el.number}</span><span class="symbol">${el.symbol}</span><span class="name">${el.name}</span>`;
+            div.onclick = () => showInfo(el);
+            return div;
+        }
+
+        let currentIndex = 0;
+        let animationId = null;
+        let angleOffset = 0;
+        let atomVisible = false; // persists across element navigation
+
+        function neutronsOf(el) {
+            return Math.max(0, Math.round(el.mass) - el.protons);
+        }
+
+        function shellArray(el) {
+            return el.shells.split('/').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        }
+
+        function hideNucleusTooltip() {
+            document.getElementById('nucleus-tooltip').classList.remove('active');
+            document.getElementById('nucleus-line-svg').classList.remove('active');
+        }
+
+        function showInfo(el) {
+            currentIndex = elementsData.indexOf(el);
+
+            document.getElementById('info-name').textContent = el.name;
+            document.getElementById('info-symbol').textContent = `Symbol: ${el.symbol}`;
+            document.getElementById('info-number').textContent = `Ordnungszahl: ${el.number}`;
+            document.getElementById('info-mass').textContent = `Atommasse: ${el.mass}`;
+            document.getElementById('info-protons').textContent = `Protonen: ${el.protons}`;
+            document.getElementById('info-neutrons').textContent = `Neutronen (ca.): ${neutronsOf(el)}`;
+            document.getElementById('info-electrons').textContent = `Elektronen: ${el.electrons}`;
+            document.getElementById('info-state').textContent = `Zustand: ${el.state}`;
+            document.getElementById('info-shells').textContent = `Schalen: ${el.shells}`;
+            document.getElementById('info-found').textContent = `Vorkommen: ${el.found}`;
+            document.getElementById('info-uses').textContent = `Verwendung: ${el.uses}`;
+
+            updateElementImage(el);
+
+            document.getElementById('info-card').classList.add('active');
+
+            // new element -> old nucleus tooltip content is stale, hide it
+            hideNucleusTooltip();
+
+            const stage = document.getElementById('atom-stage');
+            if (atomVisible) {
+                stage.classList.add('active');
+                if (animationId) cancelAnimationFrame(animationId);
+                drawAtom(document.getElementById('atom-canvas'));
+            } else {
+                stage.classList.remove('active');
+                if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+            }
+        }
+
+        function updateElementImage(el) {
+            const box = document.getElementById('element-image');
+            if (el.img && el.img.trim() !== '') {
+                box.innerHTML = `<img src="${el.img}" alt="${el.name}">`;
+            } else {
+                box.innerHTML = `<span>${el.symbol}</span>`;
+            }
+        }
+
+        function closeInfo() {
+            document.getElementById('info-card').classList.remove('active');
+            if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+            document.getElementById('atom-stage').classList.remove('active');
+            hideNucleusTooltip();
+            atomVisible = false;
+        }
+
+        function nextElement() {
+            currentIndex = (currentIndex + 1) % elementsData.length;
+            showInfo(elementsData[currentIndex]);
+        }
+
+        function prevElement() {
+            currentIndex = (currentIndex - 1 + elementsData.length) % elementsData.length;
+            showInfo(elementsData[currentIndex]);
+        }
+
+        function toggleAtom() {
+            const stage = document.getElementById('atom-stage');
+            atomVisible = !atomVisible;
+            if (atomVisible) {
+                stage.classList.add('active');
+                drawAtom(document.getElementById('atom-canvas'));
+            } else {
+                stage.classList.remove('active');
+                if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+                hideNucleusTooltip();
+            }
+        }
+
+        function drawAtom(canvas) {
+            const ctx = canvas.getContext('2d');
+            const el = elementsData[currentIndex];
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const nucleusRadius = 11;
+
+            const shellCounts = shellArray(el);
+            const maxAvailableRadius = Math.min(centerX, centerY) - 8;
+            const orbitCount = shellCounts.length || 1;
+            const orbits = [];
+            for (let i = 0; i < orbitCount; i++) {
+                const spacing = (maxAvailableRadius - nucleusRadius - 10) / orbitCount;
+                orbits.push(nucleusRadius + 10 + spacing * (i + 1));
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // orbit rings
+                for (let i = 0; i < orbits.length; i++) {
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, orbits[i], 0, 2 * Math.PI);
+                    ctx.strokeStyle = "rgba(34, 211, 170, 0.28)";
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                // nucleus: single glowing dot
+                ctx.save();
+                ctx.shadowColor = "rgba(34, 211, 170, 0.9)";
+                ctx.shadowBlur = 14;
+                const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, nucleusRadius);
+                grad.addColorStop(0, "#8af5da");
+                grad.addColorStop(1, "#159a79");
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, nucleusRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.restore();
+
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, nucleusRadius, 0, 2 * Math.PI);
+                ctx.strokeStyle = "#bff7e8";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // electrons
+                let electronIndex = 0;
+                for (let orbit = 0; orbit < orbits.length; orbit++) {
+                    const countOnOrbit = shellCounts[orbit] || 0;
+                    for (let i = 0; i < countOnOrbit; i++) {
+                        if (electronIndex >= el.electrons) break;
+                        const angle = (2 * Math.PI * i) / countOnOrbit + angleOffset * (orbit + 1);
+                        const x = centerX + orbits[orbit] * Math.cos(angle);
+                        const y = centerY + orbits[orbit] * Math.sin(angle);
+                        ctx.save();
+                        ctx.shadowColor = "#4fd8ff";
+                        ctx.shadowBlur = 8;
+                        ctx.beginPath();
+                        ctx.arc(x, y, 3.2, 0, 2 * Math.PI);
+                        ctx.fillStyle = "#8fe9ff";
+                        ctx.fill();
+                        ctx.restore();
+                        electronIndex++;
+                    }
+                }
+
+                angleOffset += 0.02;
+                animationId = requestAnimationFrame(draw);
+            }
+
+            draw();
+        }
+
+        // Click near the nucleus (generous tolerance) to open the annotation tooltip
+        document.getElementById('atom-canvas').addEventListener('click', function (e) {
+            const canvas = e.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+            const tolerance = 30; // forgiving hit area around the nucleus
+
+            const tooltip = document.getElementById('nucleus-tooltip');
+            const lineSvg = document.getElementById('nucleus-line-svg');
+
+            if (dist <= tolerance) {
+                const el = elementsData[currentIndex];
+                const neutrons = neutronsOf(el);
+                document.getElementById('tip-protons').textContent = `Protonen: ${el.protons}`;
+                document.getElementById('tip-neutrons').textContent = `Neutronen (ca.): ${neutrons}`;
+
+                const isActive = tooltip.classList.contains('active');
+                if (isActive) {
+                    tooltip.classList.remove('active');
+                    lineSvg.classList.remove('active');
+                } else {
+                    tooltip.classList.add('active');
+                    lineSvg.classList.add('active');
+                }
+            } else {
+                tooltip.classList.remove('active');
+                lineSvg.classList.remove('active');
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeInfo();
+        });
+    </script>
+</body>
+</html>
